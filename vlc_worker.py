@@ -16,31 +16,20 @@ video_dict = {}
 
 class VLCPlayer:
     def __init__(self):
-        self.playlist = VLCTelnet("localhost", "secret", 9100) # set accordingly...
+        self.playlist = VLCTelnet("localhost", "secret", 9999) # set accordingly...
         self.video_list = []
 
         # Playlist settings
         self.playlist.loop()
         self.playlist.set_volume(0)
-        #self.playlist.fullscreen()
         self.playlist.clear()
+        self.playlist.random()
+ 
 
     def add_video(self, video):
         self.playlist.add(video.abspath)
+        #self.playlist.goto(len(self.video_list)+1)
         print(f"[Add to playlist] {video.filename}")
-
-        self.video_list = list(video_dict.keys())
-        random.shuffle(self.video_list)
-
-        self.playlist.clear()
-        for filename in self.video_list:
-            print("adding ", video_dict[filename].abspath)
-            self.playlist.add(video_dict[filename].abspath)
-
-        # Clear the playlist /
-        # Randomize video order /
-        # Prefix all unpremiered videos to the front :(
-        # Add everything to the playlist again /
 
     def play(self):
         self.playlist.play()
@@ -163,7 +152,7 @@ def main(args):
             vlc_player.play()
             time.sleep(10)
     except:
-        raise Exception("Something went wrong with workerbae3 :(")
+        raise Exception("Something went wrong with wb3 :(")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
