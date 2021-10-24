@@ -5,6 +5,9 @@ import glob
 import boto3
 import argparse
 
+import json
+
+import numpy as np
 import random
 
 from python_telnet_vlc import VLCTelnet
@@ -12,27 +15,74 @@ from python_telnet_vlc import VLCTelnet
 partying = True
 VIDEO_DIR = None
 video_dict = {}
+VIDEO_TIME = 9.8
+video_plays = {} # map filename to num plays
 
+def softmax(x):
+    z = x - max(x)
+    numerator = np.exp(z)
+    denominator = np.sum(numerator)
+    softmax = numerator/denominator
+    return softmax
 
 class VLCPlayer:
     def __init__(self):
         self.playlist = VLCTelnet("localhost", "secret", 9999) # set accordingly...
         self.video_list = []
+        self.playing = False
+        self.vid_start_time = None
+        self.clip_time = VIDEO_TIME # total time for a single clip, clips must be same length
+        self.clip_playing = False
+        self.next_clip = None
 
         # Playlist settings
-        self.playlist.loop()
+        #self.playlist.loop()
         self.playlist.set_volume(0)
         self.playlist.clear()
-        self.playlist.random()
+        #self.playlist.random()
  
-
     def add_video(self, video):
         self.playlist.add(video.abspath)
-        #self.playlist.goto(len(self.video_list)+1)
+        self.video_list.append(video)
+        self.video_list[-1].vlc_index = len(self.video_list)
         print(f"[Add to playlist] {video.filename}")
 
     def play(self):
-        self.playlist.play()
+        if not self.playing:
+            self.vid_start_time = time.time()
+            self.playing = True
+        total_play_time = time.time() - self.vid_start_time 
+        clip_clock = total_play_time % VIDEO_TIME
+
+        if clip_clock <= 0.1 and self.clip_playing == False:
+            self.clip_playing == True
+            if self.next_clip:
+                self.next_clip.plays += 1
+                self.playlist.clear()
+                self.playlist.add(self.next_clip.abspath)
+                self.playlist.play()
+                print(f"[Play clip] [p(x)={self.next_clip.p}%] {self.next_clip.filename}")
+                video_plays[self.next_clip.filename] = video_plays.get(self.next_clip.filename, 0) + 1
+                #self.playlist.play()
+            self.next_clip = self.smart_shuffle_choose_next(video_dict)
+        if clip_clock >= VIDEO_TIME - 0.1:
+            self.clip_playing = False
+
+    def smart_shuffle_choose_next(self, video_dict):
+        num_clips = len(self.video_list)
+        x = np.zeros(num_clips)
+        for i in range(num_clips):
+            video = self.video_list[i]
+            x[i] = video.plays
+        p = softmax(-x)
+
+        # TODO save video_plays dict
+
+        index = np.random.choice(np.arange(0, num_clips), p=p)
+        self.video_list[index].p = int(p[index]*100)
+
+        return self.video_list[index]
+
 
 class Video:
     def __init__(self, filename):
@@ -41,6 +91,8 @@ class Video:
         self.local_filesize = -1
         self.abspath = os.path.abspath(os.path.join(VIDEO_DIR, filename))
         self.premiered = False # Flag to check if video has been shown yet
+        self.plays = 0
+        self.vlc_index = -1
 
     def __str__(self):
         return self.filename
@@ -83,6 +135,8 @@ def init_video(bucket, obj):
 
     return Video(filename)
 
+
+
 def check_for_updates(bucket, vlc_player):
     try:
         for obj in bucket.objects.all():
@@ -120,6 +174,10 @@ def init_videos_offline(vlc_player):
 
     print(f"Added {len(files)} videos to playlist")
 
+def load_video_plays():
+    # TODO read num_plays.json
+    pass
+
 def main(args):
     try:
         if not args.dir and not args.list:
@@ -133,7 +191,7 @@ def main(args):
             init_videos_offline(vlc_player)
             while partying:
                 vlc_player.play()
-                time.sleep(10)
+                time.sleep()
 
         s3 = boto3.Session().resource('s3')
         
@@ -146,11 +204,18 @@ def main(args):
         bucket = s3.Bucket(args.bucket)
 
         # Loop videos & check bucket for updates in online mode
+        start_time = time.time()
+        initialized = False
         while partying:
-            print(f"Pinging s3... {len(video_dict.keys())} videos so far")
-            check_for_updates(bucket, vlc_player)
-            vlc_player.play()
-            time.sleep(10)
+            if (time.time() - start_time) % VIDEO_TIME >= VIDEO_TIME-0.1:
+                print(f"[Ping s3] {len(video_dict.keys())} videos so far")
+                check_for_updates(bucket, vlc_player)
+                if not initialized:
+                    time.sleep(VIDEO_TIME / 2) # check s3 in middle of a clip
+                initialized = True
+            if initialized:
+                vlc_player.play()
+            time.sleep(0.1)
     except:
         raise Exception("Something went wrong with wb3 :(")
 
