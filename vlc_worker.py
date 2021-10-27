@@ -42,9 +42,16 @@ class VLCPlayer:
         #self.playlist.random()
  
     def add_video(self, video):
+        min_plays = 1e10
         self.playlist.add(video.abspath)
         self.video_list.append(video)
         self.video_list[-1].vlc_index = len(self.video_list)
+
+        for v in self.video_list:
+            if v.plays < min_plays:
+                min_plays = v.plays
+        self.video_list[-1].plays = max(min_plays-2,0)
+
         print(f"[Add to playlist] {video.filename}")
 
     def play(self):
