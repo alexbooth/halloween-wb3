@@ -15,7 +15,7 @@ from python_telnet_vlc import VLCTelnet
 partying = True
 VIDEO_DIR = None
 video_dict = {}
-VIDEO_TIME = 9.8
+VIDEO_TIME = 48
 video_plays = {} # map filename to num plays
 
 def softmax(x):
@@ -50,7 +50,7 @@ class VLCPlayer:
         for v in self.video_list:
             if v.plays < min_plays:
                 min_plays = v.plays
-        self.video_list[-1].plays = max(min_plays-2,0)
+        self.video_list[-1].plays = max(min_plays,0)
 
         print(f"[Add to playlist] {video.filename}")
 
